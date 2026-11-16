@@ -2,8 +2,7 @@
 
 A REST API for appointment booking, with separate roles for customers, staff and business owners.
 
-<!-- Screenshot: add an image of the Swagger docs page here -->
-<!-- ![Swagger docs](docs/screenshot.png) -->
+![Swagger docs for the Booking API](docs/screenshot.png)
 
 ## The problem
 
