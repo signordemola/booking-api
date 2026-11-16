@@ -79,6 +79,7 @@ pnpm start:prod   # run the compiled build
 pnpm typecheck    # TypeScript check
 pnpm lint         # ESLint with auto-fix
 pnpm test         # unit tests
+pnpm test:e2e     # end-to-end test (needs the database)
 ```
 
 ## API overview
@@ -103,7 +104,7 @@ This is a work in progress. It is not deployed.
 
 - The booking routes have no automated tests yet.
 - The database schema has `Payment` and `EmailLog` models. No payment provider or email sending is connected yet.
-- The end-to-end test in `test/` does not run yet. Only the default unit test passes.
+- Tests are minimal: one unit test and one end-to-end test.
 - The production CORS origin in `src/main.ts` is a placeholder.
 
 Next: add tests for the booking rules, and connect payments.

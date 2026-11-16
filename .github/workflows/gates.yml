@@ -26,6 +26,8 @@ jobs:
           --health-timeout 5s --health-retries 5
     env:
       DATABASE_URL: postgresql://postgres:test@localhost:5432/test
+      JWT_SECRET_KEY: ci-only-access-secret
+      JWT_REFRESH_SECRET: ci-only-refresh-secret
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -42,4 +44,5 @@ jobs:
       - run: pnpm run lint
       - run: pnpm run db:migrate
       - run: pnpm run test
+      - run: pnpm run test:e2e
       - run: pnpm run build
