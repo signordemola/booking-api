@@ -1,446 +1,116 @@
-# Booking Management System - API Documentation
+# Booking API
 
-## Overview
+A REST API for appointment booking, with separate roles for customers, staff and business owners.
 
-This is a comprehensive booking management system with role-based access control for **Customers**, **Business Owners**, and **Staff Members**.
+<!-- Screenshot: add an image of the Swagger docs page here -->
+<!-- ![Swagger docs](docs/screenshot.png) -->
 
----
+## The problem
 
-## 📋 Table of Contents
+A service business needs one place to manage its services, its staff and its appointments.
+Customers, staff and owners each need different access to the same data.
+This API gives each role its own set of endpoints and checks the role on the server.
 
-1. [Booking Resource](#booking-resource)
-2. [Staff Resource](#staff-resource)
-3. [Authentication & Authorization](#authentication--authorization)
-4. [Error Handling](#error-handling)
-5. [Best Practices](#best-practices)
+## Features
 
----
+- Register and log in with email and password. Passwords are hashed with Argon2.
+- Short-lived access tokens and rotating refresh tokens, stored as sessions in the database.
+- Google sign-in (OAuth 2.0).
+- Role checks on protected routes: `CUSTOMER`, `STAFF`, `BUSINESS_OWNER`, `ADMIN`.
+- Business owners can create a business profile, invite and manage staff, and view booking, revenue, staff and service statistics.
+- Business owners can create, edit, deactivate and delete services.
+- Staff can view their profile, assigned services, schedule, bookings and statistics.
+- Customers can create, view, change and cancel bookings. The API rejects a time slot that conflicts with another booking.
+- Owners and staff can view bookings and update the booking status.
+- Rate limiting on all routes, with stricter limits on register, login and token refresh.
+- Request validation on every route, and Swagger docs at `/api/v1/docs`.
 
-## 🎫 Booking Resource
+## Tech stack
 
-### Customer Endpoints
+- NestJS 11 and TypeScript
+- PostgreSQL with Prisma 7
+- Passport JWT and Google OAuth
+- Swagger (OpenAPI)
+- Jest
+- pnpm
 
-#### `POST /booking`
+## Run locally
 
-**Create a new booking**
+You need:
 
-- **Role**: `CUSTOMER`
-- **Body**:
+- Node.js 20.19+, 22.12+ or 24+ (the versions Prisma 7 supports)
+- pnpm 12
+- A PostgreSQL database
 
-```json
-{
-  "serviceId": "service-id",
-  "staffId": "staff-id",
-  "startTime": "2024-12-25T10:00:00Z",
-  "customerNotes": "Optional notes"
-}
+```bash
+pnpm install
+cp .env.example .env
+pnpm exec prisma generate
+pnpm exec prisma migrate deploy
+pnpm exec prisma db seed
+pnpm start:dev
 ```
 
-- **Validations**:
-  - Service must be active
-  - Staff must be assigned to service
-  - Time slot must be available
-  - Booking time must be in the future
-- **Response**: Created booking with service, staff, and business details
+The API runs at `http://localhost:4000/api/v1`.
+The Swagger docs are at `http://localhost:4000/api/v1/docs`.
+The seed creates one business owner account. The login details are in `prisma/seed.ts`.
 
-#### `GET /booking/my`
+### Environment variables
 
-**Get my bookings**
+Set these in `.env`. The values in `.env.example` are fake.
 
-- **Role**: `CUSTOMER`
-- **Query Params**:
-  - `status`: BookingStatus (optional)
-  - `startDate`: ISO date (optional)
-  - `endDate`: ISO date (optional)
-- **Response**: Array of bookings
+| Variable                 | Purpose                                              |
+| ------------------------ | ---------------------------------------------------- |
+| `DATABASE_URL`           | PostgreSQL connection URL                            |
+| `JWT_SECRET_KEY`         | Secret that signs access tokens                      |
+| `JWT_REFRESH_SECRET`     | Secret that signs refresh tokens                     |
+| `JWT_ACCESS_EXPIRES_IN`  | Access token lifetime. Default `30m`                 |
+| `JWT_REFRESH_EXPIRES_IN` | Refresh token lifetime. Default `7d`                 |
+| `GOOGLE_CLIENT_ID`       | Google OAuth client ID                               |
+| `GOOGLE_CLIENT_SECRET`   | Google OAuth client secret                           |
+| `GOOGLE_REDIRECT_URI`    | Google OAuth callback URL                            |
+| `FRONTEND_URL`           | Where the API redirects after Google sign-in         |
+| `PORT`                   | Optional. Port the API listens on. Default `4000`    |
 
-#### `GET /booking/my/:id`
+### Other commands
 
-**Get specific booking details**
-
-- **Role**: `CUSTOMER`
-- **Response**: Detailed booking with payment info
-
-#### `PATCH /booking/my/:id`
-
-**Update my booking**
-
-- **Role**: `CUSTOMER`
-- **Body**:
-
-```json
-{
-  "startTime": "2024-12-26T11:00:00Z",
-  "customerNotes": "Updated notes"
-}
+```bash
+pnpm build        # compile to dist/
+pnpm start:prod   # run the compiled build
+pnpm typecheck    # TypeScript check
+pnpm lint         # ESLint with auto-fix
+pnpm test         # unit tests
 ```
 
-- **Restrictions**: Only PENDING bookings can be updated
-- **Validations**: New time slot must be available
+## API overview
 
-#### `DELETE /booking/my/:id`
+All routes start with `/api/v1`.
 
-**Cancel my booking**
+| Area     | Routes                                                                 |
+| -------- | ---------------------------------------------------------------------- |
+| Auth     | `POST /auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`  |
+| Google   | `GET /auth/google`, `GET /auth/google/callback`                        |
+| User     | `GET /user/profile`, `PATCH /user/profile`                             |
+| Business | `/business/profile`, `/business/stats/*`, `/business/staff/*`          |
+| Service  | `/service`, `/service/all`, `/service/:id`, `/service/:id/toggle`      |
+| Staff    | `/staff/profile`, `/staff/services`, `/staff/schedule`, `/staff/stats` |
+| Booking  | `/booking`, `/booking/my`, `/booking/owner/*`, `/booking/staff/my`     |
 
-- **Role**: `CUSTOMER`
-- **Body**:
+See the Swagger docs for request and response details.
 
-```json
-{
-  "cancellationReason": "Personal emergency"
-}
-```
+## Status and what's next
 
-- **Restrictions**: Cannot cancel COMPLETED bookings
+This is a work in progress. It is not deployed.
 
----
+- The booking routes have no automated tests yet.
+- The database schema has `Payment` and `EmailLog` models. No payment provider or email sending is connected yet.
+- The end-to-end test in `test/` does not run yet. Only the default unit test passes.
+- The production CORS origin in `src/main.ts` is a placeholder.
 
-### Business Owner Endpoints
-
-#### `GET /booking/owner/all`
-
-**Get all business bookings**
-
-- **Role**: `BUSINESS_OWNER`
-- **Query Params**: Same as customer endpoint
-- **Response**: All bookings for the business with customer details
-
-#### `GET /booking/owner/:id`
-
-**Get booking details**
-
-- **Role**: `BUSINESS_OWNER`
-- **Response**: Full booking details including payment
-
-#### `PATCH /booking/owner/:id/status`
-
-**Update booking status**
-
-- **Role**: `BUSINESS_OWNER`
-- **Body**:
-
-```json
-{
-  "status": "CONFIRMED",
-  "staffNotes": "Confirmed with client"
-}
-```
-
-- **Allowed Statuses**:
-  - `CONFIRMED` - Sets confirmedAt timestamp
-  - `COMPLETED` - Sets completedAt timestamp
-  - `CANCELLED` - Sets cancelledAt timestamp
-  - `NO_SHOW` - Customer didn't show up
+Next: add tests for the booking rules, and connect payments.
 
 ---
 
-### Staff Endpoints
+Built by [Adedamola](https://github.com/signordemola) · [Demola Studio](https://www.demolastudio.com)
 
-#### `GET /booking/staff/my`
-
-**Get my assigned bookings**
-
-- **Role**: `STAFF`
-- **Query Params**: Same as other endpoints
-- **Response**: Bookings assigned to this staff member
-
-#### `GET /booking/staff/my/:id`
-
-**Get booking details**
-
-- **Role**: `STAFF`
-- **Response**: Booking details for assigned booking
-
-#### `PATCH /booking/staff/my/:id/status`
-
-**Update booking status**
-
-- **Role**: `STAFF`
-- **Body**: Same as owner status update
-- **Allowed Statuses**: `CONFIRMED`, `COMPLETED`
-
----
-
-## 👨‍💼 Staff Resource
-
-### Profile Management
-
-#### `GET /staff/profile`
-
-**Get my staff profile**
-
-- **Role**: `STAFF`
-- **Response**:
-
-```json
-{
-  "id": "staff-id",
-  "userId": "user-id",
-  "businessId": "business-id",
-  "position": "Senior Hair Stylist",
-  "bio": "10+ years experience...",
-  "isActive": true,
-  "customSchedule": {...},
-  "user": {...},
-  "business": {...},
-  "_count": {
-    "services": 5,
-    "bookings": 120
-  }
-}
-```
-
-#### `PATCH /staff/profile`
-
-**Update my profile**
-
-- **Role**: `STAFF`
-- **Body**:
-
-```json
-{
-  "position": "Senior Hair Stylist",
-  "bio": "Updated bio...",
-  "customSchedule": {
-    "monday": { "open": "10:00", "close": "18:00", "closed": false },
-    "tuesday": { "open": "10:00", "close": "18:00", "closed": false }
-  }
-}
-```
-
----
-
-### Services
-
-#### `GET /staff/services`
-
-**Get my assigned services**
-
-- **Role**: `STAFF`
-- **Response**: Array of services assigned to staff member
-
----
-
-### Schedule & Availability
-
-#### `GET /staff/schedule`
-
-**Get my schedule**
-
-- **Role**: `STAFF`
-- **Query Params**:
-  - `startDate`: ISO date (optional, defaults to today)
-  - `endDate`: ISO date (optional, defaults to +7 days)
-- **Response**:
-
-```json
-{
-  "customSchedule": {...},
-  "bookings": [...],
-  "dateRange": {
-    "start": "2024-12-20T00:00:00Z",
-    "end": "2024-12-27T00:00:00Z"
-  }
-}
-```
-
-#### `GET /staff/bookings/today`
-
-**Get today's bookings**
-
-- **Role**: `STAFF`
-- **Response**: Array of today's bookings sorted by start time
-
-#### `GET /staff/bookings/upcoming`
-
-**Get upcoming bookings**
-
-- **Role**: `STAFF`
-- **Response**: Next 10 upcoming bookings
-
----
-
-### Statistics & Analytics
-
-#### `GET /staff/stats`
-
-**Get my statistics**
-
-- **Role**: `STAFF`
-- **Query Params**:
-  - `startDate`: ISO date (optional)
-  - `endDate`: ISO date (optional)
-- **Response**:
-
-```json
-{
-  "totalBookings": 150,
-  "completedBookings": 130,
-  "cancelledBookings": 10,
-  "pendingBookings": 5,
-  "confirmedBookings": 5,
-  "totalRevenue": 125000.0,
-  "completionRate": "86.67"
-}
-```
-
----
-
-### Business Information
-
-#### `GET /staff/business`
-
-**Get my business details**
-
-- **Role**: `STAFF`
-- **Response**: Business information including owner and stats
-
-#### `GET /staff/business/staff`
-
-**Get all business staff members**
-
-- **Role**: `STAFF`
-- **Response**: Array of all active staff in the same business
-
----
-
-## 🔐 Authentication & Authorization
-
-### Guards Used
-
-1. **JwtAuthGuard**: Validates JWT token
-2. **RolesGuard**: Validates user role
-
-### Role Hierarchy
-
-- `ADMIN` - System administrator
-- `BUSINESS_OWNER` - Business owner
-- `STAFF` - Staff member
-- `CUSTOMER` - Regular customer
-
-### Token Requirements
-
-All protected endpoints require:
-
-```
-Authorization: Bearer <jwt_token>
-```
-
----
-
-## ⚠️ Error Handling
-
-### Common HTTP Status Codes
-
-- `200 OK` - Success
-- `201 Created` - Resource created
-- `400 Bad Request` - Validation error
-- `401 Unauthorized` - Missing/invalid token
-- `403 Forbidden` - Insufficient permissions
-- `404 Not Found` - Resource not found
-- `409 Conflict` - Duplicate resource or conflicting state
-
-### Error Response Format
-
-```json
-{
-  "statusCode": 400,
-  "message": "Validation error message",
-  "error": "Bad Request"
-}
-```
-
----
-
-## ✅ Best Practices
-
-### 1. Booking Time Slot Validation
-
-The system automatically:
-
-- Validates time slots are in the future
-- Checks for conflicting bookings
-- Calculates end time based on service duration
-
-### 2. Soft Deletion Pattern
-
-Services and staff with active bookings are **deactivated** instead of deleted:
-
-```json
-{
-  "message": "Service deactivated (has active bookings)!",
-  "deactivated": true
-}
-```
-
-### 3. Cascading Operations
-
-- Deleting a business removes all related data
-- Deleting a user removes their sessions and accounts
-- Staff removal considers active bookings
-
-### 4. Date/Time Handling
-
-- All timestamps stored in UTC
-- Use ISO 8601 format: `2024-12-25T10:00:00Z`
-- Consider business timezone for display
-
-### 5. Query Optimization
-
-- All list endpoints use proper indexes
-- Selective field loading with `select`
-- Related data loaded with `include`
-
----
-
-## 📊 Booking Status Flow
-
-```
-PENDING → CONFIRMED → COMPLETED
-   ↓          ↓
-CANCELLED  CANCELLED
-   ↓
-NO_SHOW (only from CONFIRMED)
-```
-
-### Status Transitions
-
-- **Customer**: Can create (PENDING) and cancel
-- **Staff**: Can confirm and complete
-- **Owner**: Can manage all statuses including NO_SHOW
-
----
-
-## 🔄 Payment Integration Ready
-
-The schema includes a Payment model linked to bookings:
-
-- Payment status tracked separately
-- Provider reference for external payment gateways
-- Webhook payload storage for reconciliation
-
----
-
-## 📝 Notes
-
-1. **Staff Assignment**: Staff must be assigned to a service before customers can book
-2. **Business Hours**: Validated against `businessHours` and staff `customSchedule`
-3. **Multi-tenancy**: Each business is isolated via `businessId`
-4. **Audit Trail**: Timestamps tracked for key actions (confirmed, completed, cancelled)
-
----
-
-## 🚀 Getting Started
-
-1. Import modules in `app.module.ts`
-2. Run Prisma migrations
-3. Seed initial data (admin user, test business)
-4. Test endpoints with Swagger UI at `/api`
-
----
-
-## 📚 Additional Resources
-
-- [Prisma Documentation](https://www.prisma.io/docs)
-- [NestJS Documentation](https://docs.nestjs.com)
-- [JWT Best Practices](https://tools.ietf.org/html/rfc8725)
+See also: [booking-engine](https://github.com/signordemola/booking-engine)

@@ -10,6 +10,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { BusinessModule } from './business/business.module';
 import { StaffModule } from './staff/staff.module';
 import { ServiceModule } from './service/service.module';
+import { BookingModule } from './booking/booking.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { ServiceModule } from './service/service.module';
     BusinessModule,
     StaffModule,
     ServiceModule,
+    BookingModule,
   ],
   controllers: [AppController],
   providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],
